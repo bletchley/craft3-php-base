@@ -49,7 +49,7 @@ RUN apt-get install --no-install-recommends --no-install-suggests -q -y \
 
 # Override nginx's default config
 RUN rm -rf /etc/nginx/nginx.conf
-ADD ./default.conf /etc/nginx/nginx.conf
+ADD ./nginx.conf /etc/nginx/nginx.conf
 RUN rm -rf /etc/nginx/conf.d/default.conf
 ADD ./default.conf /etc/nginx/conf.d/default.conf
 
