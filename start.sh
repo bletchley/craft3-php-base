@@ -8,10 +8,10 @@ if (( $EUID != 0 )); then
 
     # Update to actual username of running user
     sed -i -e "s/user  nginx/user  $user/" /etc/nginx/nginx.conf
-    sed -i -e "s/user = nginx/user = $user/" /etc/php/7.1/fpm/pool.d/www.conf
-    sed -i -e "s/listen.owner = nginx/listen.owner = $user/" /etc/php/7.1/fpm/pool.d/www.conf
-    sed -i -e "s/group = nginx/group = $group/" /etc/php/7.1/fpm/pool.d/www.conf
-    sed -i -e "s/listen.group = nginx/listen.group = $group/" /etc/php/7.1/fpm/pool.d/www.conf
+    sed -i -e "s/user = nginx/user = $user/" /etc/php/7.2/fpm/pool.d/www.conf
+    sed -i -e "s/listen.owner = nginx/listen.owner = $user/" /etc/php/7.2/fpm/pool.d/www.conf
+    sed -i -e "s/group = nginx/group = $group/" /etc/php/7.2/fpm/pool.d/www.conf
+    sed -i -e "s/listen.group = nginx/listen.group = $group/" /etc/php/7.2/fpm/pool.d/www.conf
 fi
 
 # Set the correct port for nginx

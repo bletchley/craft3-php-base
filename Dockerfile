@@ -4,9 +4,8 @@ LABEL Bletchley Park "team@bletchley.co"
 
 # Let the container know that there is no tty
 ENV DEBIAN_FRONTEND noninteractive
-ENV NGINX_VERSION 1.13.5-1~stretch
-ENV php_conf /etc/php/7.1/fpm/php.ini
-ENV fpm_conf /etc/php/7.1/fpm/pool.d/www.conf
+ENV fpm_conf /etc/php/7.2/fpm/pool.d/www.conf
+ENV php_conf /etc/php/7.2/fpm/php.ini
 ENV COMPOSER_VERSION 1.5.2
 
 # Install Basic Requirements
@@ -36,35 +35,36 @@ ADD ./supervisord.conf /etc/supervisord.conf
 # Avoid ERROR: invoke-rc.d: policy-rc.d denied execution of start.
 RUN echo "#!/bin/sh\nexit 0" > /usr/sbin/policy-rc.d
 
-# Add sources for latest nginx and php
-RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
-    && echo "deb http://nginx.org/packages/mainline/debian/ stretch nginx" >> /etc/apt/sources.list \
-    && wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg \
-    && echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list \
-    && apt-get update
+RUN wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+RUN echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
+RUN wget http://nginx.org/keys/nginx_signing.key
+RUN apt-key add nginx_signing.key
+RUN echo "deb http://nginx.org/packages/debian/ stretch nginx" | tee -a /etc/apt/sources.list
+RUN echo "deb-src http://nginx.org/packages/debian/ stretch nginx" | tee -a /etc/apt/sources.list
+RUN apt-get update
 
 # Install nginx
-RUN apt-get install --no-install-recommends --no-install-suggests -q -y \
-                        nginx=${NGINX_VERSION}
+RUN apt-get install --no-install-recommends --no-install-suggests -q -y nginx
+RUN nginx -v
 
 # Override nginx's default config
-RUN rm -rf /etc/nginx/nginx.conf
-ADD ./nginx.conf /etc/nginx/nginx.conf
+#RUN rm -rf /etc/nginx/nginx.conf
+#ADD ./nginx.conf /etc/nginx/nginx.conf
 RUN rm -rf /etc/nginx/conf.d/default.conf
 ADD ./default.conf /etc/nginx/conf.d/default.conf
 
 # Install PHP
 RUN apt-get install --no-install-recommends --no-install-suggests -q -y \
-    php7.1-fpm php7.1-cli php7.1-dev php7.1-common \
-    php7.1-json php7.1-opcache php7.1-readline php7.1-mbstring php7.1-curl php7.1-memcached \
-    php7.1-imagick php7.1-mcrypt php7.1-zip php7.1-pgsql php7.1-intl php7.1-xml
+    php7.2 php7.2-fpm php7.2-cli php7.2-dev php7.2-common \
+    php7.2-json php7.2-opcache php7.2-readline php7.2-mbstring php7.2-curl php7.2-memcached \
+    php7.2-imagick php7.2-zip php7.2-pgsql php7.2-intl php7.2-xml
 
 # Override php-fpm config
 RUN sed -i -e "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g" ${php_conf} && \
 sed -i -e "s/upload_max_filesize\s*=\s*2M/upload_max_filesize = 100M/g" ${php_conf} && \
 sed -i -e "s/post_max_size\s*=\s*8M/post_max_size = 100M/g" ${php_conf} && \
 sed -i -e "s/variables_order = \"GPCS\"/variables_order = \"EGPCS\"/g" ${php_conf} && \
-sed -i -e "s/;daemonize\s*=\s*yes/daemonize = no/g" /etc/php/7.1/fpm/php-fpm.conf && \
+sed -i -e "s/;daemonize\s*=\s*yes/daemonize = no/g" /etc/php/7.2/fpm/php-fpm.conf && \
 sed -i -e "s/;catch_workers_output\s*=\s*yes/catch_workers_output = yes/g" ${fpm_conf} && \
 sed -i -e "s/pm.max_children = 5/pm.max_children = 4/g" ${fpm_conf} && \
 sed -i -e "s/pm.start_servers = 2/pm.start_servers = 3/g" ${fpm_conf} && \
