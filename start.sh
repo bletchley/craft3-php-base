@@ -1,24 +1,17 @@
-#!/bin/bash
+#!/bin/sh
 
-env | awk -F = '{print $1}'
+# set port number to be listened as $PORT or 8080
+sed -i -E "s/TO_BE_REPLACED_WITH_PORT/${PORT:-8080}/" /etc/nginx/conf.d/*.conf
 
-if (( $EUID != 0 )); then
-    user=`whoami`
-    group=`id -gn`
+# "/var/tmp/nginx" owned by "nginx" user is unusable on heroku dyno so re-create on runtime
+mkdir -p /var/tmp/nginx
 
-    # Update to actual username of running user
-    sed -i -e "s/user  nginx/user  $user/" /etc/nginx/nginx.conf
-    sed -i -e "s/user = nginx/user = $user/" /etc/php/7.2/fpm/pool.d/www.conf
-    sed -i -e "s/listen.owner = nginx/listen.owner = $user/" /etc/php/7.2/fpm/pool.d/www.conf
-    sed -i -e "s/group = nginx/group = $group/" /etc/php/7.2/fpm/pool.d/www.conf
-    sed -i -e "s/listen.group = nginx/listen.group = $group/" /etc/php/7.2/fpm/pool.d/www.conf
-fi
+# make php-fpm be able to listen request from nginx (current user is nginx executor)
+sed -i -E "s/^;listen.owner = .*/listen.owner = $(whoami)/" /etc/php7/php-fpm.d/www.conf
 
-# Set the correct port for nginx
-sed -i -e "s/DOCKER_PORT/$PORT/" /etc/nginx/conf.d/default.conf
+# make current user the executor of nginx and php-fpm expressly for local environment
+sed -i -E "s/^user = .*/user = $(whoami)/" /etc/php7/php-fpm.d/www.conf
+sed -i -E "s/^group = (.*)/;group = \1/" /etc/php7/php-fpm.d/www.conf
+sed -i -E "s/^user .*/user $(whoami);/" /etc/nginx/nginx.conf
 
-# Update nginx to match worker_processes to no. of cpu's
-sed -i -e "s/worker_processes  1/worker_processes $NGINX_WORKERS/" /etc/nginx/nginx.conf
-
-# Start supervisord and services
-/usr/local/bin/supervisord -n -c /etc/supervisord.conf
+supervisord --nodaemon --configuration /etc/supervisord.conf

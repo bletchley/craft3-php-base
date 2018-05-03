@@ -1,96 +1,119 @@
-FROM debian:stretch
+FROM alpine:3.6
 
-LABEL Bletchley Park "team@bletchley.co"
+ENV DOCROOT /docroot
+WORKDIR $DOCROOT
 
-# Let the container know that there is no tty
-ENV DEBIAN_FRONTEND noninteractive
-ENV fpm_conf /etc/php/7.2/fpm/pool.d/www.conf
-ENV php_conf /etc/php/7.2/fpm/php.ini
-ENV COMPOSER_VERSION 1.5.2
+RUN \
+    apk update \
+    \
+    # install openssl and ca certificates
+    && apk add ca-certificates wget \
+    && apk add openssl \
+    \
+    # install git
+    && apk add git \
+    \
+    # install postgres client
+    && apk add postgresql-client \
+    && apk add postgresql-dev \
+    \
+    # install php
+    && apk add php7 \
+    && apk add php7-apcu \
+    && apk add php7-ctype \
+    && apk add php7-curl \
+    && apk add php7-dom \
+    && apk add php7-fileinfo \
+    && apk add php7-ftp \
+    && apk add php7-iconv \
+    && apk add php7-imagick \
+    && apk add php7-intl \
+    && apk add php7-json \
+    && apk add php7-mbstring \
+    && apk add php7-mcrypt \
+    && apk add php7-memcached \
+    && apk add php7-opcache \
+    && apk add php7-openssl \
+    && apk add php7-pdo \
+    && apk add php7-pgsql \
+    && apk add php7-pdo_pgsql \
+    && apk add php7-phar \
+    && apk add php7-posix \
+    && apk add php7-session \
+    && apk add php7-simplexml \
+    && apk add php7-sqlite3 \
+    && apk add php7-tokenizer \
+    && apk add php7-xml \
+    && apk add php7-xmlreader \
+    && apk add php7-xmlwriter \
+    && apk add php7-zip \
+    && apk add php7-zlib \
+    \
+    # install php-fpm
+    && apk add php7-fpm \
+    && mkdir /var/run/php-fpm \
+    # install nginx and create default pid directory
+    && apk add nginx \
+    && mkdir -p /run/nginx \
+    \
+    # forward nginx logs to docker log collector
+    && sed -i -E "s/error_log .+/error_log \/dev\/stderr warn;/" /etc/nginx/nginx.conf \
+    && sed -i -E "s/access_log .+/access_log \/dev\/stdout main;/" /etc/nginx/nginx.conf \
+    \
+    # install supervisor
+    && apk add supervisor \
+    && mkdir -p /etc/supervisor.d/ \
+    \
+    # remove caches to decrease image size
+    && rm -rf /var/cache/apk/* \
+    \
+    # install composer
+    && EXPECTED_SIGNATURE=$(wget -q -O - https://composer.github.io/installer.sig) \
+    && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    && php -r "if (hash_file('SHA384', 'composer-setup.php') === '$EXPECTED_SIGNATURE') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" \
+    && php composer-setup.php --install-dir=/usr/bin --filename=composer \
+    && php -r "unlink('composer-setup.php');"
 
-# Install Basic Requirements
-RUN apt-get update \
-    && apt-get install --no-install-recommends --no-install-suggests -q -y \
-    apt-transport-https \
-    lsb-release \
-    wget \
-    apt-utils \
-    gnupg \
-    curl \
-    nano \
-    zip \
-    unzip \
-    python-pip \
-    python-setuptools \
-    dirmngr \
-    git \
-    ca-certificates \
-    postgresql-client
+ENV PHP_INI_DIR /etc/php7
+ENV NGINX_CONFD_DIR /etc/nginx/conf.d
 
-# Supervisor config
-RUN pip install wheel
-RUN pip install supervisor supervisor-stdout
-ADD ./supervisord.conf /etc/supervisord.conf
+COPY php.ini $PHP_INI_DIR/
+COPY nginx.conf $NGINX_CONFD_DIR/default.conf
+COPY supervisor.programs.ini /etc/supervisor.d/
+COPY php-fpm.d-www.conf /etc/php7/php-fpm.d/www.conf
+COPY start.sh /
 
-# Avoid ERROR: invoke-rc.d: policy-rc.d denied execution of start.
-RUN echo "#!/bin/sh\nexit 0" > /usr/sbin/policy-rc.d
-
-RUN wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
-RUN echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
-RUN wget http://nginx.org/keys/nginx_signing.key
-RUN apt-key add nginx_signing.key
-RUN echo "deb http://nginx.org/packages/debian/ stretch nginx" | tee -a /etc/apt/sources.list
-RUN echo "deb-src http://nginx.org/packages/debian/ stretch nginx" | tee -a /etc/apt/sources.list
-RUN apt-get update
-
-# Install nginx
-RUN apt-get install --no-install-recommends --no-install-suggests -q -y nginx
-RUN nginx -v
-
-# Override nginx's default config
-#RUN rm -rf /etc/nginx/nginx.conf
-#ADD ./nginx.conf /etc/nginx/nginx.conf
-RUN rm -rf /etc/nginx/conf.d/default.conf
-ADD ./default.conf /etc/nginx/conf.d/default.conf
-
-# Install PHP
-RUN apt-get install --no-install-recommends --no-install-suggests -q -y \
-    php7.2 php7.2-fpm php7.2-cli php7.2-dev php7.2-common \
-    php7.2-json php7.2-opcache php7.2-readline php7.2-mbstring php7.2-curl php7.2-memcached \
-    php7.2-imagick php7.2-zip php7.2-pgsql php7.2-intl php7.2-xml
-
-# Override php-fpm config
-RUN sed -i -e "s/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/g" ${php_conf} && \
-sed -i -e "s/upload_max_filesize\s*=\s*2M/upload_max_filesize = 100M/g" ${php_conf} && \
-sed -i -e "s/post_max_size\s*=\s*8M/post_max_size = 100M/g" ${php_conf} && \
-sed -i -e "s/variables_order = \"GPCS\"/variables_order = \"EGPCS\"/g" ${php_conf} && \
-sed -i -e "s/;daemonize\s*=\s*yes/daemonize = no/g" /etc/php/7.2/fpm/php-fpm.conf && \
-sed -i -e "s/;catch_workers_output\s*=\s*yes/catch_workers_output = yes/g" ${fpm_conf} && \
-sed -i -e "s/pm.max_children = 5/pm.max_children = 4/g" ${fpm_conf} && \
-sed -i -e "s/pm.start_servers = 2/pm.start_servers = 3/g" ${fpm_conf} && \
-sed -i -e "s/pm.min_spare_servers = 1/pm.min_spare_servers = 2/g" ${fpm_conf} && \
-sed -i -e "s/pm.max_spare_servers = 3/pm.max_spare_servers = 4/g" ${fpm_conf} && \
-sed -i -e "s/pm.max_requests = 500/pm.max_requests = 200/g" ${fpm_conf} && \
-sed -i -e "s/www-data/nginx/g" ${fpm_conf} && \
-sed -i -e "s/^;clear_env = no$/clear_env = no/" ${fpm_conf}
-
-# Clean up
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN curl -o /tmp/composer-setup.php https://getcomposer.org/installer \
-  && curl -o /tmp/composer-setup.sig https://composer.github.io/installer.sig \
-  && php -r "if (hash('SHA384', file_get_contents('/tmp/composer-setup.php')) !== trim(file_get_contents('/tmp/composer-setup.sig'))) { unlink('/tmp/composer-setup.php'); echo 'Invalid installer' . PHP_EOL; exit(1); }"
-
-RUN php /tmp/composer-setup.php --no-ansi --install-dir=/usr/local/bin --filename=composer --version=${COMPOSER_VERSION} && rm -rf /tmp/composer-setup.php
-
-# Remove existing webroot & re-configure php for Craft
-RUN rm -rf /usr/share/nginx/* && \
-sed -i -e "s/memory_limit\s*=\s*.*/memory_limit = 256M/g" ${php_conf}
-
-# Add Scripts
-ADD ./start.sh /start.sh
-RUN chmod 755 /start.sh
-
-EXPOSE 80
+RUN \
+    # add non-root user
+    # @see https://devcenter.heroku.com/articles/container-registry-and-runtime#run-the-image-as-a-non-root-user
+    adduser -D nonroot \
+    \
+    # following are just for local environment
+    # (on heroku dyno there is no permission problem because most of the filesystem owned by the current non-root user)
+    && chmod a+x /start.sh \
+    \
+    # to update conf files and create temp files under the directory via sed command on runtime
+    && chmod -R a+w /etc/php7/php-fpm.d \
+    && chmod -R a+w /etc/nginx \
+    \
+    # to run php-fpm (socker directory)
+    && chmod a+w /var/run/php-fpm \
+    \
+    # to run nginx (default pid directory and tmp directory)
+    && chmod -R a+w /run/nginx \
+    && chmod -R a+wx /var/tmp/nginx \
+    \
+    # to run supervisor (read conf and create socket)
+    && chmod -R a+r /etc/supervisor* \
+    && sed -i -E "s/^file=\/run\/supervisord\.sock/file=\/run\/supervisord\/supervisord.conf/" /etc/supervisord.conf \
+    && mkdir -p /run/supervisord \
+    && chmod -R a+w /run/supervisord \
+    \
+    # to output logs
+    && chmod -R a+w /var/log \
+    \
+    # add nonroot to sudoers
+    && apk add --update sudo \
+    && echo "nonroot ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 CMD ["/start.sh"]
