@@ -75,7 +75,7 @@ RUN \
     && php -r "unlink('composer-setup.php');"
 
 ENV PHP_INI_DIR /etc/php7
-ENV NGINX_CONFD_DIR /etc/nginx/conf.d
+ENV NGINX_CONFD_DIR /etc/nginx/http.d
 
 COPY php.ini $PHP_INI_DIR/
 COPY nginx.conf $NGINX_CONFD_DIR/default.conf

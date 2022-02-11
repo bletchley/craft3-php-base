@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # set port number to be listened as $PORT or 8080
-sed -i -E "s/TO_BE_REPLACED_WITH_PORT/${PORT:-8080}/" /etc/nginx/conf.d/*.conf
+sed -i -E "s/TO_BE_REPLACED_WITH_PORT/${PORT:-8080}/" /etc/nginx/http.d/*.conf
 
 # "/var/tmp/nginx" owned by "nginx" user is unusable on heroku dyno so re-create on runtime
 mkdir -p /var/tmp/nginx
