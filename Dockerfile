@@ -1,4 +1,4 @@
-FROM alpine:3.6
+FROM alpine:3.15.0
 
 ENV DOCROOT /docroot
 WORKDIR $DOCROOT
@@ -12,7 +12,7 @@ RUN \
     \
     # install git
     && apk add git \
-    \
+    && apk add openssh \
     # install postgres client
     && apk add postgresql-client \
     && apk add postgresql-dev \
@@ -96,11 +96,14 @@ RUN \
     && chmod -R a+w /etc/php7/php-fpm.d \
     && chmod -R a+w /etc/nginx \
     \
-    # to run php-fpm (socker directory)
+    # to run php-fpm   (socker directory)
     && chmod a+w /var/run/php-fpm \
     \
     # to run nginx (default pid directory and tmp directory)
+    && mkdir -p /var/lib/nginx/tmp /var/lib/nginx/log \
+    && chmod -R a+rwx /var/lib/nginx \
     && chmod -R a+w /run/nginx \
+    && mkdir -p /var/tmp/nginx \
     && chmod -R a+wx /var/tmp/nginx \
     \
     # to run supervisor (read conf and create socket)
